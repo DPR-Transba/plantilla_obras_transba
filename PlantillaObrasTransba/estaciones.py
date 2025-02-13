@@ -4,6 +4,10 @@ import psspy
 from .transformadores import crea_trafo_2w, crea_trafo_3w, crea_reactor_zig_zag
 from .generadores import crea_generador_eolico
 
+_i = psspy.getdefaultint()
+_f = psspy.getdefaultreal()
+_s = psspy.getdefaultchar()
+
 
 def crea_estacion(ibus, nombre, codigo, area, trafos):
     """    
@@ -84,7 +88,7 @@ def crea_PPEE(ibus, gbus, nombre, codigo, area, trafo_estacion, colector, trafo_
     psspy.bus_data_4(gbus, 0, [2, area["area"], area["zone"], 11], [tension_generador, 1.0, 0.0, 1.05, 0.95, 1.1, 0.9], codigo)
     
     # Crea trafos
-    if trafo_estacion.has_key("x12"):
+    if trafo_estacion.get("x12", False):
         bmt3 = int(str(ibus) + "91")
         psspy.bus_data_4(bmt3, 0, [1, area["area"], area["zone"], 11], [13.2, 1.0, 0.0, 1.07, 0.93, 1.1, 0.9], "{}_03".format(codigo_corto))
         crea_trafo_3w(ibus, bmt1, bmt3,"1", "", **trafo_estacion)        
@@ -134,7 +138,6 @@ def mueve_demandas(ibus, jbus, porcentaje=1):
         return mueve_demandas(ibus, [jbus], porcentaje)
 
     if isinstance(ibus, list) and isinstance(jbus, list):        
-        print psspy.bsys(0,0,[_f,_f],0,[],len(ibus),ibus,0,[],0,[])
         ierr, (id_arr,) = psspy.aloadchar(0, 1, "ID")
         ierr, (number_arr, scale_arr,) = psspy.aloadint(0, 1, ["NUMBER", "SCALE"])
         ierr, (slod,) = psspy.aloadcplx(0, 1, "MVAACT")
