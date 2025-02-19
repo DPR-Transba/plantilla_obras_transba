@@ -181,4 +181,17 @@ def secciona_linea_con_doble_terna(ibus, jbus, ckt, fraction, kbus, bus_name, li
     # Ajusta los rates de la linea 2
     
     
+def crea_interruptor(ibus, jbus, ckt):
+    """
+    Crea un interruptor entre dos barras.
+
+    Parámetros:
+    ibus (int): Identificador de la barra de origen.
+    jbus (int): Identificador de la barra de destino.
+    ckt (str): Identificador del circuito en general empieza con @.
+
+    Ejemplo de uso:
+    crea_interruptor(2000, 2200, "@1")
+    """
+    psspy.system_swd_data(ibus, jbus, ckt,[1,1,ibus,2])
 
