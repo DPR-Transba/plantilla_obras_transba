@@ -3,7 +3,25 @@ import psspy
 from math import sqrt
 
 
-def crea_linea(ibus, jbus, ckt, length, name, r, x, b, r0, x0, b0, limitante, conductor, ti_origen, ti_destino, op_origen, op_destino):
+def crea_linea(
+    ibus,
+    jbus,
+    ckt,
+    length,
+    name,
+    r,
+    x,
+    b,
+    r0,
+    x0,
+    b0,
+    limitante,
+    conductor,
+    ti_origen,
+    ti_destino,
+    op_origen,
+    op_destino,
+):
     """
     Crea una línea de transmisión en el sistema de potencia utilizando PSSE.
 
@@ -46,9 +64,9 @@ def crea_linea(ibus, jbus, ckt, length, name, r, x, b, r0, x0, b0, limitante, co
 
     crea_linea(2000, 2200, "1", 120, "1JURF1", **LINEA_AL_300_50)
     """
-    
+
     ierr, ubase = psspy.busdat(ibus, "BASE")
-    zbase = ubase ** 2 / psspy.sysmva()
+    zbase = ubase**2 / psspy.sysmva()
 
     r *= length / zbase
     x *= length / zbase
@@ -58,20 +76,118 @@ def crea_linea(ibus, jbus, ckt, length, name, r, x, b, r0, x0, b0, limitante, co
     x0 *= length / zbase
     b0 *= length * zbase * 1e-6
 
-    limitante  *= sqrt(3) * ubase / 1000
-    conductor  *= sqrt(3) * ubase / 1000
-    ti_origen  *= sqrt(3) * ubase / 1000
+    limitante *= sqrt(3) * ubase / 1000
+    conductor *= sqrt(3) * ubase / 1000
+    ti_origen *= sqrt(3) * ubase / 1000
     ti_destino *= sqrt(3) * ubase / 1000
-    op_origen  *= sqrt(3) * ubase / 1000
+    op_origen *= sqrt(3) * ubase / 1000
     op_destino *= sqrt(3) * ubase / 1000
 
-    psspy.branch_data_3(ibus, jbus, ckt, [1, 1, 10, 0, 0, 0], [r, x, b, 0.0, 0.0, 0.0, 0.0, length, 1.0, 0.0, 0.0, 0.0],[limitante, 0.0, conductor, ti_origen, ti_destino, op_origen, op_destino, 0.0, 0.0, 0.0, 0.0, 0.0], "TBA_" + name)
-    psspy.seq_branch_data_3(ibus, jbus, ckt, 0,[r0, x0, b0, 0, 0, 0, 0, 0])
+    psspy.branch_data_3(
+        ibus,
+        jbus,
+        ckt,
+        [1, 1, 10, 0, 0, 0],
+        [r, x, b, 0.0, 0.0, 0.0, 0.0, length, 1.0, 0.0, 0.0, 0.0],
+        [
+            limitante,
+            0.0,
+            conductor,
+            ti_origen,
+            ti_destino,
+            op_origen,
+            op_destino,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        ],
+        "TBA_" + name,
+    )
+    psspy.seq_branch_data_3(ibus, jbus, ckt, 0, [r0, x0, b0, 0, 0, 0, 0, 0])
 
 
+def secciona_linea(ibus, jbus, ckt, fraction, kbus, bus_name):
+    """
+    Secciona una línea de transmisión en PSS®E.
+
+    Parámetros:
+    ibus (int): Número de la barra de origen.
+    jbus (int): Número de la barra de destino.
+    ckt (str): Identificador del circuito.
+    fraction (float): Fracción de la línea donde se insertará la nueva barra.
+    kbus (int): Número de la nueva barra de seccionamiento.
+    bus_name (str): Nombre de la nueva barra de seccionamiento.
+
+    Ejemplo:
+    secciona_linea(101, 102, "1", 0.5, 201, "BARRA_201")
+
+    """
+    if psspy.busexs(kbus) == 0:
+        print("Warning: Se corta una linea con una barra existente")
+        print(
+            """
+        Procedimiento:
+        
+        (1)                     (2)                     (3)
+        
+        A ----------- B         A -----D----- B         A ----   ---- B
+                                                              | |
+               C                       C                       C
+        """
+        )
+        psspy.ltap(ibus, jbus, ckt, fraction, 999997, "DUMMY", 1.0)
+
+        # Las lineas se deben mover a un circuito nuevo
+        existe_linea = (
+            lambda ibus, jbus, ckt: not psspy.brnint(ibus, jbus, str(ckt), "STATUS")[0]
+            == 2
+        )
+
+        new_ckt_1 = 1
+        while existe_linea(ibus, kbus, new_ckt_1):
+            new_ckt_1 += 1
+        new_ckt_1 = str(new_ckt_1)
+        psspy.movebrn(ibus, 999997, ckt, kbus, new_ckt_1)
+
+        new_ckt_2 = 1
+        while existe_linea(jbus, kbus, new_ckt_2):
+            new_ckt_2 += 1
+        new_ckt_2 = str(new_ckt_2)
+        psspy.movebrn(jbus, 999997, ckt, kbus, new_ckt_2)
+
+        psspy.bsysinit(1)
+        psspy.bsyso(1, 999997)
+        psspy.extr(1, 0, [0, 0])
+    else:
+        ierr, base = psspy.busdat(ibus, "BASE")
+        psspy.ltap(ibus, jbus, ckt, fraction, kbus, bus_name, base)
+        new_ckt_1 = new_ckt_2 = "1"
 
 
-def secciona_linea_con_doble_terna(ibus, jbus, ckt, fraction, kbus, bus_name, lines_name, length, r, x, b, r0, x0, b0, limitante, conductor, ti_origen, ti_destino, op_origen, op_destino):
+def secciona_linea_con_doble_terna(
+    ibus,
+    jbus,
+    ckt,
+    fraction,
+    kbus,
+    bus_name,
+    lines_name,
+    length,
+    r,
+    x,
+    b,
+    r0,
+    x0,
+    b0,
+    limitante,
+    conductor,
+    ti_origen,
+    ti_destino,
+    op_origen,
+    op_destino,
+):
     """
     Secciona una línea de transmisión con doble terna en un nuevo nodo intermedio.
     Añade la parte de línea en DT sobre cada uno de los nuevos lados de las líneas.
@@ -105,48 +221,41 @@ def secciona_linea_con_doble_terna(ibus, jbus, ckt, fraction, kbus, bus_name, li
     """
 
     # Corta la linea
-    if psspy.busexs(kbus) == 0:
-        print("Warning: Se corta una linea con una barra existente")
-        print(
-        """
-        Procedimiento:
-        
-        (1)                     (2)                     (3)
-        
-        A ----------- B         A -----D----- B         A ----   ---- B
-                                                              | |
-               C                       C                       C
-        """
-        )
-        psspy.ltap(ibus, jbus, ckt, fraction,999997,"DUMMY", 1.0)
-        
-        # Las lineas se deben mover a un circuito nuevo
-        existe_linea = lambda ibus, jbus, ckt: not psspy.brnint(ibus,jbus,str(ckt),"STATUS")[0] == 2
-        
-        new_ckt_1 = 1
-        while existe_linea(ibus, kbus, new_ckt_1):
-            new_ckt_1 += 1
-        new_ckt_1 = str(new_ckt_1)
-        psspy.movebrn(ibus, 999997, ckt, kbus, new_ckt_1)
-        
-        new_ckt_2 = 1
-        while existe_linea(jbus, kbus, new_ckt_2):
-            new_ckt_2 += 1
-        new_ckt_2 = str(new_ckt_2)
-        psspy.movebrn(jbus, 999997, ckt, kbus, new_ckt_2)
+    secciona_linea(ibus, jbus, ckt, fraction, kbus, bus_name)
 
-        psspy.bsysinit(1)
-        psspy.bsyso(1,999997)
-        psspy.extr(1,0,[0,0])
-    else:
-        ierr, base = psspy.busdat(ibus, "BASE")
-        psspy.ltap(ibus, jbus, ckt, fraction, kbus, bus_name, base)
-        new_ckt_1 = new_ckt_2 = "1"
-
-    
     # Valores que se adicionan a la linea a cortar con los parametros tipicos definidos
+    extiende_linea(ibus, kbus, new_ckt_1, length, r, x, b, r0, x0, b0)
+    psspy.branch_chng_3(ibus, kbus, new_ckt_1, namear=lines_name[0])
+
+    extiende_linea(jbus, kbus, new_ckt_2, length, r, x, b, r0, x0, b0)
+    psspy.branch_chng_3(jbus, kbus, new_ckt_2, namear=lines_name[1])
+
+    # Ajusta los rates de las lineas
+
+    # Ajusta los rates de la linea 2
+
+
+def extiende_linea(ibus, jbus, ckt, length, r, x, b, r0, x0, b0):
+    """
+    Extiende la longitud de una línea de transmisión en PSS®E.
+
+    Parámetros:
+    ibus (int): Número de la barra de origen.
+    jbus (int): Número de la barra de destino.
+    ckt (str): Identificador del circuito.
+    length (float): Longitud a agregar a la línea en km.
+    r (float): Resistencia positiva por unidad de longitud (Ω/km).
+    x (float): Reactancia positiva por unidad de longitud (Ω/km).
+    b (float): Susceptancia positiva por unidad de longitud (μS/km).
+    r0 (float): Resistencia homopolar por unidad de longitud (Ω/km).
+    x0 (float): Reactancia homopolar por unidad de longitud (Ω/km).
+    b0 (float): Susceptancia homopolar por unidad de longitud (μS/km).
+
+    Ejemplo:
+    extiende_linea(101, 102, "1", 10.0, 0.02, 0.1, 0.001, 0.05, 0.2, 0.002)
+    """
     ierr, ubase = psspy.busdat(ibus, "BASE")
-    zbase = ubase ** 2 / psspy.sysmva()
+    zbase = ubase**2 / psspy.sysmva()
 
     r *= length / zbase
     x *= length / zbase
@@ -156,42 +265,45 @@ def secciona_linea_con_doble_terna(ibus, jbus, ckt, fraction, kbus, bus_name, li
     x0 *= length / zbase
     b0 *= length * zbase * 1e-6
 
-    # Extiende la longitud de la linea 1    
-    ierr, original_length = psspy.brndat(ibus, kbus, new_ckt_1, "LENGTH")
-    ierr, rx    = psspy.brndt2(ibus, kbus, new_ckt_1, "RX")
-    ierr, char  = psspy.brndat(ibus, kbus, new_ckt_1, "CHARG")
-    ierr, rxz   = psspy.brndt2(ibus, kbus, new_ckt_1, "RXZ")
-    ierr, charz = psspy.brndat(ibus, kbus, new_ckt_1, "CHARGZ")
-    psspy.branch_chng_3(ibus, kbus, new_ckt_1, realar1=rx.real + r, realar2=rx.imag + x, realar3=char + b, realar8=original_length + length, namear=lines_name[0])
-    psspy.seq_branch_data_3(ibus, kbus, new_ckt_1, realar1=rxz.real + r0, realar2=rxz.imag + x0, realar3=charz + b0)
-    
-    # Extiende la longitud de la linea 2
-    ierr, original_length = psspy.brndat(jbus, kbus, new_ckt_2, "LENGTH")
-    ierr, rx    = psspy.brndt2(jbus, kbus, new_ckt_2, "RX")
-    ierr, char  = psspy.brndat(jbus, kbus, new_ckt_2, "CHARG")
-    ierr, rxz   = psspy.brndt2(jbus, kbus, new_ckt_2, "RXZ")
-    ierr, charz = psspy.brndat(jbus, kbus, new_ckt_2, "CHARGZ")
-    psspy.branch_chng_3(jbus, kbus, new_ckt_2, realar1=rx.real + r, realar2=rx.imag + x, realar3=char + b, realar8=original_length + length, namear=lines_name[1])
-    psspy.seq_branch_data_3(jbus, kbus, new_ckt_2, realar1=rxz.real + r0, realar2=rxz.imag + x0, realar3=charz + b0)
-    
-    
-    # Ajusta los rates de las lineas
-    
-    
-    # Ajusta los rates de la linea 2
-    
-    
-def crea_interruptor(ibus, jbus, ckt):
+    ierr, original_length = psspy.brndat(ibus, jbus, ckt, "LENGTH")
+    ierr, rx = psspy.brndt2(ibus, jbus, ckt, "RX")
+    ierr, char = psspy.brndat(ibus, jbus, ckt, "CHARG")
+    ierr, rxz = psspy.brndt2(ibus, jbus, ckt, "RXZ")
+    ierr, charz = psspy.brndat(ibus, jbus, ckt, "CHARGZ")
+    psspy.branch_chng_3(
+        ibus,
+        jbus,
+        ckt,
+        realar1=rx.real + r,
+        realar2=rx.imag + x,
+        realar3=char + b,
+        realar8=original_length + length,
+    )
+    psspy.seq_branch_data_3(
+        ibus,
+        jbus,
+        ckt,
+        realar1=rxz.real + r0,
+        realar2=rxz.imag + x0,
+        realar3=charz + b0,
+    )
+
+
+def crea_interruptor(ibus, jbus, ckt="@1"):
     """
     Crea un interruptor entre dos barras.
 
     Parámetros:
     ibus (int): Identificador de la barra de origen.
     jbus (int): Identificador de la barra de destino.
-    ckt (str): Identificador del circuito en general empieza con @.
+    ckt (str): Identificador del circuito en general ("@1" por defecto).
 
     Ejemplo de uso:
     crea_interruptor(2000, 2200, "@1")
     """
-    psspy.system_swd_data(ibus, jbus, ckt,[1,1,ibus,2])
-
+    psspy.system_swd_data(
+        ibus,
+        jbus,
+        ckt,
+        [0, 1, ibus, 2],
+    )
